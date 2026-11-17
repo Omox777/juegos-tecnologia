@@ -1,0 +1,488 @@
+<title>Enciende la Tarjeta Madre</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Atkinson+Hyperlegible:wght@400;700&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: el tablero ES una tarjeta madre; cada reto es un chip soldado que se enciende al resolverlo. Un solo look oscuro de circuito, a propósito. */
+:root{
+  --pcb:#0B3D2C; --pcb-hi:#0F4A36; --panel:#08291E; --trace:#C9963B;
+  --silk:#EAF3EC; --muted:#9CC3AE; --chip:#131719; --chip-hi:#1F2528; --pin:#B9C2C6;
+  --led-on:#4BF39B; --led-wait:#FFB238; --led-off:#34453E; --bad:#FF7070; --ink-on-led:#06261A;
+  --display:"Chakra Petch","Arial Narrow",system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+  --mono:"Share Tech Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{background:var(--pcb);color:var(--silk)}
+body{font-family:var(--body);font-size:17px;line-height:1.45;
+  background-image:
+    linear-gradient(rgba(201,150,59,.10) 2px,transparent 2px),
+    linear-gradient(90deg,rgba(201,150,59,.10) 2px,transparent 2px),
+    radial-gradient(circle,rgba(201,150,59,.22) 3px,transparent 4px);
+  background-size:120px 120px,120px 120px,60px 60px;background-position:0 30px,30px 0,0 0}
+.wrap{max-width:980px;margin:0 auto;padding-block:20px 56px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex;flex-direction:column;gap:20px}
+h1,h2,h3,p,ol,ul{margin:0}
+h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.05;text-wrap:balance}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--led-wait);outline-offset:3px}
+.mono{font-family:var(--mono)}
+.label{font-family:var(--mono);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* Panel base */
+.panel{background:var(--panel);border:2px solid var(--trace);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.btn{background:var(--led-on);color:var(--ink-on-led);border:0;border-radius:10px;padding:12px 20px;font-family:var(--display);font-weight:700;font-size:17px;cursor:pointer;align-self:flex-start;box-shadow:0 4px 0 #1C8A55}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #1C8A55}
+.btn.ghost{background:transparent;color:var(--silk);border:2px solid var(--muted);box-shadow:none}
+.btn.warn{background:var(--bad);color:#2A0505;box-shadow:0 4px 0 #9E2F2F}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.link{background:none;border:0;padding:4px 6px;color:var(--muted);text-decoration:underline;cursor:pointer}
+
+/* Encabezado / tablero de mando */
+.top{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;align-items:end}
+.top h1{font-size:clamp(32px,6.4vw,54px);letter-spacing:.01em}
+.top h1 em{font-style:normal;color:var(--led-on)}
+.top .lead{color:var(--muted);max-width:46ch;margin-top:8px}
+.meters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.meter{background:var(--panel);border:2px solid var(--trace);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.meter b{font-family:var(--display);font-size:26px;font-variant-numeric:tabular-nums;line-height:1}
+.meter span{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.boot{grid-column:1/-1;display:flex;flex-direction:column;gap:6px}
+.bootbar{height:14px;border:2px solid var(--trace);border-radius:4px;background:var(--panel);overflow:hidden}
+.bootbar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,var(--led-on) 0 10px,#2FB874 10px 14px);transition:width .5s}
+.bootrow{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.rankchip{font-family:var(--mono);color:var(--led-wait)}
+@media (max-width:720px){ .top{grid-template-columns:1fr} }
+
+/* La tarjeta madre */
+.board{position:relative;border:3px solid var(--trace);border-radius:18px;background:var(--pcb-hi);
+  padding:26px 30px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:26px 34px}
+.board::before{content:"MB-SI · REV 1.0";position:absolute;top:6px;right:16px;font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.14em}
+.chip{position:relative;background:var(--chip);border:2px solid var(--chip-hi);border-radius:8px;padding:14px 12px 12px;
+  display:flex;flex-direction:column;gap:8px;align-items:flex-start;text-align:left;cursor:pointer;min-width:0;min-height:132px;
+  box-shadow:0 6px 0 rgba(0,0,0,.35)}
+.chip::before,.chip::after{content:"";position:absolute;top:16px;bottom:16px;width:8px;
+  background:repeating-linear-gradient(to bottom,var(--pin) 0 5px,transparent 5px 12px)}
+.chip::before{left:-10px}.chip::after{right:-10px}
+.chip:hover:not(:disabled){border-color:var(--trace);transform:translateY(-2px)}
+.chip .notch{position:absolute;top:-2px;left:50%;width:22px;height:10px;margin-left:-11px;border-radius:0 0 11px 11px;background:var(--pcb-hi)}
+.led{width:12px;height:12px;border-radius:50%;background:var(--led-off);flex:none}
+.chip.open .led{background:var(--led-wait);box-shadow:0 0 10px var(--led-wait);animation:blink 1.4s infinite}
+.chip.done .led{background:var(--led-on);box-shadow:0 0 12px var(--led-on)}
+@keyframes blink{50%{opacity:.35}}
+.chip .code{font-family:var(--mono);font-size:13px;color:var(--muted);letter-spacing:.1em}
+.chip .name{font-family:var(--display);font-size:18px;line-height:1.1;overflow-wrap:anywhere}
+.chip .state{margin-top:auto;font-family:var(--mono);font-size:14px;color:var(--muted)}
+.chip.done .state{color:var(--led-on);font-size:16px;letter-spacing:.1em}
+.chip.locked{cursor:not-allowed;background:repeating-linear-gradient(135deg,var(--chip) 0 10px,#171C1E 10px 20px)}
+.chip.locked .name{font-size:34px;color:var(--led-off)}
+.chip.power{grid-column:1/-1;flex-direction:row;align-items:center;gap:18px;min-height:0;background:var(--chip);border-color:var(--led-on)}
+.chip.power[disabled]{border-color:var(--chip-hi);cursor:not-allowed}
+.pwr{flex:none;width:58px;height:58px;border-radius:50%;border:3px solid currentColor;display:grid;place-items:center;color:var(--led-off);position:relative}
+.pwr::before{content:"";width:22px;height:22px;border:3px solid currentColor;border-top-color:transparent;border-radius:50%}
+.pwr::after{content:"";position:absolute;top:10px;width:3px;height:18px;background:currentColor;border-radius:2px}
+.chip.power:not([disabled]) .pwr{color:var(--led-on);box-shadow:0 0 18px rgba(75,243,155,.45)}
+@media (max-width:820px){ .board{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:560px){ .board{grid-template-columns:repeat(2,minmax(0,1fr));padding:22px 20px;gap:22px 26px} .chip .name{font-size:16px} }
+
+/* Bitácora */
+.log{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.card{border:2px dashed var(--led-off);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.card.on{border-style:solid;border-color:var(--trace);background:rgba(201,150,59,.06)}
+.card h3{font-size:16px}
+.card p{font-size:15px;color:var(--muted)}
+.card.on p{color:var(--silk)}
+
+/* Reto */
+.phead{display:flex;gap:14px;align-items:flex-start}
+.phead > div{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.phead h2{font-size:26px}
+.badge{flex:none;font-family:var(--mono);background:var(--chip);border:2px solid var(--trace);border-radius:6px;padding:8px 10px;color:var(--led-wait)}
+.prog{font-family:var(--mono);color:var(--muted);letter-spacing:.1em}
+.errs{color:var(--bad)}
+.q{font-size:21px;font-weight:700;text-wrap:balance}
+.item{font-family:var(--display);font-size:clamp(22px,5vw,30px);text-align:center;background:var(--chip);border:2px solid var(--trace);border-radius:12px;padding:26px 16px;text-wrap:balance}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.opts.cats{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+@media (max-width:560px){ .opts:not(.cats):not(.tf){grid-template-columns:1fr} }
+.opt{background:var(--chip);border:2px solid var(--chip-hi);border-radius:10px;padding:13px 14px;text-align:left;cursor:pointer;font-weight:700;min-width:0;overflow-wrap:anywhere}
+.opts.cats .opt,.opts.tf .opt{text-align:center;font-family:var(--display);font-size:18px;padding:16px 8px}
+.opt:hover:not(:disabled){border-color:var(--trace)}
+.opt:disabled{cursor:default;opacity:.5}
+.opt.is-good{background:var(--led-on);color:var(--ink-on-led);border-color:var(--led-on);opacity:1}
+.opt.is-bad{background:var(--bad);color:#2A0505;border-color:var(--bad);opacity:1}
+.fb{display:flex;flex-direction:column;gap:10px}
+.verdict{font-family:var(--display);font-size:21px}
+.verdict.good{color:var(--led-on)} .verdict.bad{color:var(--bad)}
+.why{max-width:62ch}
+.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-7px)}50%{transform:translateX(7px)}75%{transform:translateX(-4px)}}
+
+/* Resultado */
+.result{align-items:center;text-align:center}
+.result .btn,.result .row{align-self:center;justify-content:center}
+.stars{font-size:clamp(46px,12vw,70px);letter-spacing:.12em;color:var(--led-wait);line-height:1}
+.stars s{text-decoration:none;color:var(--led-off)}
+.ficha{max-width:560px;text-align:left;border:2px solid var(--trace);border-radius:12px;padding:14px 16px;background:rgba(201,150,59,.06);display:flex;flex-direction:column;gap:6px}
+
+/* Inicio */
+.field{display:flex;flex-direction:column;gap:8px}
+.field label{font-weight:700}
+.field input{font:inherit;color:var(--silk);background:var(--chip);border:2px solid var(--trace);border-radius:10px;padding:11px 14px;width:100%;max-width:360px}
+.err{color:var(--bad);font-weight:700;min-height:1.3em}
+.howto{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;list-style:none;padding:0}
+.howto li{display:flex;gap:10px;align-items:flex-start}
+.howto .led{margin-top:5px}
+@media (max-width:640px){ .howto{grid-template-columns:1fr} }
+
+/* Arranque final */
+.term{font-family:var(--mono);background:#030D09;border:2px solid var(--led-on);border-radius:10px;padding:16px;color:var(--led-on);min-height:300px;display:flex;flex-direction:column;gap:3px;overflow-x:auto;font-size:15px}
+.term .dim{color:var(--muted)}
+.records{list-style:none;padding:0;display:grid;gap:6px;width:100%;max-width:420px;text-align:left}
+.records li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dotted var(--muted);padding:4px 2px;font-family:var(--mono)}
+.records li span:first-child{min-width:0;overflow-wrap:anywhere}
+@media (prefers-reduced-motion: reduce){
+  .chip.open .led{animation:none} .shake{animation:none} .bootbar i{transition:none}
+}
+</style>
+
+<div class="wrap" id="app"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- Contenido ---------------- */
+var VF = ["Verdadero","Falso"];
+var T = [
+ {id:"sys", code:"U1", name:"Sistema informático", type:"quiz",
+  intro:"Las piezas básicas de todo sistema. 3 preguntas.",
+  ficha:"Un sistema informático se forma con hardware (lo físico), software (los programas) y el usuario que lo opera. El hardware aporta la capacidad y la potencia de procesamiento.",
+  qs:[
+   {q:"¿Cuáles son las tres partes de un sistema informático?", opts:["Hardware, software y usuario","Teclado, monitor y mouse","Internet, wifi y nube","CPU, RAM y disco duro"], a:0, why:"El sistema necesita lo físico (hardware), los programas (software) y a la persona que lo usa."},
+   {q:"¿Qué parte proporciona la capacidad y la potencia de procesamiento?", opts:["El hardware","Las redes sociales","El fondo de pantalla","El usuario"], a:0, why:"Los componentes físicos son los que procesan la información."},
+   {q:"El hardware es la parte del sistema que…", opts:["Se puede tocar (es tangible)","Solo existe en internet","Está formada por programas","Nunca necesita electricidad"], a:0, why:"El hardware es el conjunto mecánico, eléctrico y electrónico de partes físicas."}
+  ]},
+ {id:"mov", code:"U2", name:"Equipos según su movilidad", type:"sort",
+  intro:"Clasifica cada equipo según qué tan fácil es moverlo.",
+  cats:["Fijo","Portátil","Móvil"],
+  ficha:"Según su movilidad, los equipos de cómputo pueden ser fijos (de escritorio), portátiles (laptop) o móviles (smartphone, tablet, smartwatch).",
+  items:[["Computadora de escritorio",0],["Laptop",1],["Smartphone",2],["Servidor de una escuela",0],["Tablet",2],["Netbook",1],["Smartwatch",2]]},
+ {id:"hw", code:"U3", name:"Tipos de hardware", type:"sort",
+  intro:"¿Almacena, procesa o comunica con el exterior?",
+  cats:["Almacenamiento","Procesamiento","Periférico"],
+  ficha:"El hardware es la parte tangible del equipo. Se clasifica en almacenamiento (la «memoria»), procesamiento (el corazón, donde se calcula) y periférico (comunica con el exterior).",
+  items:[["Disco duro",0],["Microprocesador",1],["Teclado",2],["Memoria USB",0],["Impresora",2],["Tarjeta gráfica",1],["Unidad SSD",0],["Monitor",2]]},
+ {id:"per", code:"U4", name:"Periféricos", type:"sort",
+  intro:"¿Mete datos, saca información o hace las dos cosas?",
+  cats:["Entrada","Salida","Mixto"],
+  ficha:"Los periféricos de entrada introducen datos, los de salida muestran o envían información y los mixtos hacen ambas funciones a la vez.",
+  items:[["Teclado",0],["Monitor",1],["Pantalla táctil",2],["Micrófono",0],["Bocinas",1],["Impresora multifuncional",2],["Escáner",0],["Impresora",1],["Diadema con micrófono",2],["Mouse",0]]},
+ {id:"cpu", code:"U5", name:"Procesador (CPU)", type:"quiz",
+  intro:"El componente principal de la computadora. 3 preguntas.",
+  ficha:"La CPU (unidad central de procesamiento) procesa y ejecuta las instrucciones que le envían los demás componentes, de forma simultánea y veloz.",
+  qs:[
+   {q:"¿Qué significan las siglas CPU?", opts:["Unidad central de procesamiento","Computadora personal unida","Control de puertos USB","Central de programas útiles"], a:0, why:"Vienen del inglés central processing unit."},
+   {q:"¿Cuál es la función de la CPU?", opts:["Procesar y ejecutar las instrucciones","Guardar fotos para siempre","Mostrar imágenes en pantalla","Dar acceso a internet"], a:0, why:"Recibe instrucciones de los demás componentes y las ejecuta."},
+   {q:"La CPU procesa las instrucciones de forma simultánea y veloz.", opts:VF, a:0, tf:true, why:"Trabaja con muchas instrucciones al mismo tiempo y a gran velocidad."}
+  ]},
+ {id:"mb", code:"U6", name:"Placa base", type:"quiz",
+  intro:"La base donde todo se conecta. 3 preguntas.",
+  ficha:"La placa base o tarjeta madre es el soporte donde se conectan el microprocesador, la memoria RAM, el disco duro, las unidades de CD y DVD y los demás elementos.",
+  qs:[
+   {q:"¿Qué otro nombre recibe la placa base?", opts:["Tarjeta madre","Tarjeta de video","Memoria madre","Placa de red"], a:0, why:"También se le dice motherboard o tarjeta madre."},
+   {q:"¿Cuál es su función?", opts:["Ser el soporte donde se conectan los demás componentes","Leer discos con un láser","Imprimir documentos","Enfriar el monitor"], a:0, why:"Todo se conecta a ella: procesador, RAM, discos y tarjetas."},
+   {q:"La placa base es la que ejecuta todas las instrucciones.", opts:VF, a:1, tf:true, why:"Falso: las ejecuta el microprocesador. La placa base es el soporte que lo conecta todo."}
+  ]},
+ {id:"mp", code:"U7", name:"Microprocesador", type:"quiz",
+  intro:"El cerebro en miniatura. 3 preguntas.",
+  ficha:"El microprocesador ejecuta y gestiona las instrucciones lógicas. Está compuesto por circuitos integrados que contienen miles de transistores.",
+  qs:[
+   {q:"¿De qué está compuesto el microprocesador?", opts:["Circuitos integrados con miles de transistores","Engranes y poleas","Discos que se leen con láser","Cables de red"], a:0, why:"Millones de pequeños interruptores llamados transistores hacen los cálculos."},
+   {q:"¿Qué hace el microprocesador?", opts:["Ejecuta y gestiona las instrucciones lógicas","Guarda archivos aunque se apague","Conecta el monitor","Amplía las funciones de la placa"], a:0, why:"Es la unidad que resuelve las operaciones."},
+   {q:"El microprocesador va conectado a la placa base.", opts:VF, a:0, tf:true, why:"Verdadero: se monta en un zócalo de la tarjeta madre."}
+  ]},
+ {id:"ram", code:"U8", name:"Memoria RAM", type:"quiz",
+  intro:"Rápida pero olvidadiza. 3 preguntas.",
+  ficha:"La RAM (memoria de acceso aleatorio) es de alta velocidad y guarda de forma temporal los programas y datos con los que la computadora va a trabajar.",
+  qs:[
+   {q:"¿Qué significa RAM?", opts:["Memoria de acceso aleatorio","Memoria de archivo rápido","Máquina de acceso remoto","Memoria de solo lectura"], a:0, why:"Random Access Memory."},
+   {q:"La RAM guarda los datos para siempre, aunque apagues la computadora.", opts:VF, a:1, tf:true, why:"Falso: la RAM es temporal. Lo permanente se guarda en el disco duro."},
+   {q:"¿Para qué sirve la RAM?", opts:["Guardar temporalmente lo que se está usando","Conectar la computadora a internet","Leer CD y DVD","Imprimir en papel"], a:0, why:"Ahí viven los programas y datos abiertos en este momento."}
+  ]},
+ {id:"hdd", code:"U9", name:"Disco duro", type:"quiz",
+  intro:"Donde la información se queda. 3 preguntas.",
+  ficha:"El disco duro almacena datos, programas y archivos de forma permanente, aunque se apague la computadora.",
+  qs:[
+   {q:"¿Cómo guarda la información el disco duro?", opts:["De forma permanente","Solo mientras está encendido","Solo durante un minuto","Únicamente en internet"], a:0, why:"Por eso tus archivos siguen ahí al día siguiente."},
+   {q:"Si apagas la computadora, se borra lo que guardaste en el disco duro.", opts:VF, a:1, tf:true, why:"Falso: el disco duro no pierde la información al apagarse."},
+   {q:"El disco duro es hardware de…", opts:["Almacenamiento","Salida","Procesamiento","Entrada"], a:0, why:"Funciona como la memoria a largo plazo del equipo."}
+  ]},
+ {id:"opt", code:"U10", name:"Almacenamiento óptico", type:"quiz",
+  intro:"La luz también guarda datos. 3 preguntas.",
+  ficha:"Los dispositivos ópticos usan un rayo láser para leer y escribir datos en CD o DVD. Los datos quedan grabados en hoyos o surcos microscópicos.",
+  qs:[
+   {q:"¿Qué usan para leer y escribir datos?", opts:["Un rayo láser","Imanes","Electricidad estática","Ondas de radio"], a:0, why:"Por eso se llaman ópticos: trabajan con luz."},
+   {q:"¿Cuáles son ejemplos de almacenamiento óptico?", opts:["CD y DVD","USB y tarjeta SD","RAM y ROM","HDMI y VGA"], a:0, why:"Son los discos plateados que lee una unidad lectora."},
+   {q:"¿Dónde quedan grabados los datos?", opts:["En hoyos o surcos microscópicos","En la etiqueta del disco","En la nube","En un chip dentro de la caja"], a:0, why:"El láser lee las diferencias de esos surcos en la superficie."}
+  ]},
+ {id:"exp", code:"U11", name:"Tarjetas de expansión", type:"quiz",
+  intro:"Más poderes para tu computadora. 3 preguntas.",
+  ficha:"Las tarjetas de expansión son circuitos que se instalan en la placa base para ampliar su funcionalidad, como las tarjetas de video, de sonido o de red.",
+  qs:[
+   {q:"¿Qué son las tarjetas de expansión?", opts:["Circuitos que amplían las funciones de la computadora","Tarjetas para pagar en línea","Memorias que se pierden al apagar","Cables para el monitor"], a:0, why:"Agregan capacidades que la placa no trae o mejoran las que tiene."},
+   {q:"¿Cuál de estas es una tarjeta de expansión?", opts:["Tarjeta de video","Tarjeta de crédito","Tarjeta de presentación","Tarjeta del transporte"], a:0, why:"Las de video, sonido y red son las más comunes."},
+   {q:"Las tarjetas de expansión se instalan en la placa base.", opts:VF, a:0, tf:true, why:"Verdadero: se insertan en las ranuras de la tarjeta madre."}
+  ]},
+ {id:"port", code:"U12", name:"Puertos", type:"sort",
+  intro:"¿Qué puerto usarías para cada tarea?",
+  cats:["USB","Ethernet","VGA"],
+  ficha:"Los puertos son conexiones eléctricas para los periféricos. USB conecta memorias, impresoras, escáneres y cámaras; Ethernet conecta a la red o al router; VGA conecta monitores.",
+  items:[["Conectar una memoria",0],["Conectar el cable del router para tener internet",1],["Conectar un monitor",2],["Conectar una impresora",0],["Unir la computadora a la red de la escuela",1],["Pasar las fotos de una cámara",0],["Conectar un escáner",0]]}
+];
+
+/* ---------------- Estado ---------------- */
+var KEY = "tarjetaMadre.progreso", RKEY = "tarjetaMadre.records";
+var state = {name:"", best:{}, booted:false};
+var app = document.getElementById("app");
+
+function h(tag, props){
+  var e = document.createElement(tag), k, i;
+  if (props) for (k in props){
+    var v = props[k];
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.slice(0,2) === "on") e.addEventListener(k.slice(2), v);
+    else if (k === "style") e.style.cssText = v;
+    else if (v === true) e.setAttribute(k, "");
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (i = 2; i < arguments.length; i++) add(e, arguments[i]);
+  return e;
+}
+function add(e, c){
+  if (c == null || c === false) return;
+  if (Array.isArray(c)){ c.forEach(function(x){ add(e, x); }); return; }
+  e.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
+}
+function shuffle(a){ for (var i = a.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+function load(){ try { var s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && s.name) return s; } catch (e) {} return null; }
+function isDone(i){ return state.best[T[i].id] != null; }
+function isOpen(i){ return i === 0 || isDone(i) || (i >= 1 && isDone(i - 1)) || (i >= 4 && isDone(i - 4)); }
+function doneCount(){ return T.filter(function(_, i){ return isDone(i); }).length; }
+function starSum(){ var s = 0; T.forEach(function(t){ s += state.best[t.id] || 0; }); return s; }
+function rank(s){
+  return s >= 36 ? "Maestra/o del sistema" : s >= 27 ? "Ingeniería de hardware" : s >= 18 ? "Técnico experto" : s >= 9 ? "Técnico junior" : "Aprendiz de técnico";
+}
+function stars(n){ var out = h("span", {class:"stars", "aria-label": n + " de 3 estrellas"}); for (var i = 0; i < 3; i++) add(out, i < n ? "★" : h("s", null, "★")); return out; }
+function starTxt(n){ return "★★★".slice(0, n) + "☆☆☆".slice(0, 3 - n); }
+function starsFor(errs){ return errs === 0 ? 3 : errs <= 2 ? 2 : 1; }
+function show(){ app.replaceChildren.apply(app, arguments); window.scrollTo(0, 0); }
+
+/* ---------------- Inicio ---------------- */
+function showStart(){
+  var input = h("input", {id:"alumno", type:"text", maxlength:"28", autocomplete:"off", placeholder:"Ej. Ana Martínez"});
+  var err = h("p", {class:"err", role:"alert"});
+  function go(ev){
+    ev.preventDefault();
+    var n = input.value.trim();
+    if (!n){ err.textContent = "Escribe tu nombre para registrar tu progreso."; input.focus(); return; }
+    state = {name:n, best:{}, booted:false}; save(); showBoard();
+  }
+  show(h("section", {class:"panel"},
+    h("p", {class:"label"}, "Componentes de un sistema informático"),
+    h("h1", {style:"font-size:clamp(34px,8vw,64px)"}, "Enciende la ", h("em", {style:"font-style:normal;color:var(--led-on)"}, "tarjeta madre")),
+    h("p", {style:"max-width:52ch;color:var(--muted)"}, "La computadora no arranca: 12 chips están apagados y escondidos. Resuelve el reto de cada uno para soldarlo, descubrir el siguiente y, al final, presionar el botón de encendido."),
+    h("ul", {class:"howto"},
+      h("li", null, h("span", {class:"led", style:"background:var(--led-off)"}), h("span", null, "Los chips con ", h("b", null, "?"), " siguen ocultos. Se descubren al resolver uno vecino.")),
+      h("li", null, h("span", {class:"led", style:"background:var(--led-wait)"}), h("span", null, "Un LED ámbar parpadea en los chips listos para jugar.")),
+      h("li", null, h("span", {class:"led", style:"background:var(--led-on)"}), h("span", null, "Sin errores ganas 3 estrellas. Puedes repetir un reto para mejorar."))),
+    h("form", {class:"field", onsubmit:go, novalidate:true},
+      h("label", {for:"alumno"}, "Tu nombre"), input, err,
+      h("button", {class:"btn", type:"submit"}, "Entrar al taller"))));
+  input.focus();
+}
+
+/* ---------------- Tablero ---------------- */
+function showBoard(){
+  var n = doneCount(), s = starSum(), all = n === T.length;
+  var chips = T.map(function(t, i){
+    var done = isDone(i), open = isOpen(i);
+    if (!open) return h("button", {class:"chip locked", type:"button", disabled:true, "aria-label":"Chip oculto"},
+      h("span", {class:"notch"}), h("span", {class:"led"}), h("span", {class:"code", text:t.code}), h("span", {class:"name"}, "?"),
+      h("span", {class:"state"}, "Oculto"));
+    return h("button", {class:"chip " + (done ? "done" : "open"), type:"button", onclick:function(){ play(t); }},
+      h("span", {class:"notch"}), h("span", {class:"led"}), h("span", {class:"code", text:t.code}),
+      h("span", {class:"name", text:t.name}),
+      h("span", {class:"state", text: done ? starTxt(state.best[t.id]) : "Jugar reto"}));
+  });
+  var power = h("button", {class:"chip power", type:"button", disabled:!all, onclick:boot},
+    h("span", {class:"pwr", "aria-hidden":"true"}),
+    h("span", {style:"display:flex;flex-direction:column;gap:4px;min-width:0"},
+      h("span", {class:"name", text:"Botón de encendido"}),
+      h("span", {class:"state", style:"margin-top:0", text: all ? "Todos los chips listos. Presiona para arrancar el sistema." :
+        "Faltan " + (T.length - n) + (T.length - n === 1 ? " chip por soldar." : " chips por soldar.")})));
+
+  var cards = T.map(function(t, i){
+    var on = isDone(i);
+    return h("article", {class:"card" + (on ? " on" : "")},
+      h("p", {class:"label", text:t.code + (on ? " · " + starTxt(state.best[t.id]) : " · bloqueada")}),
+      h("h3", {text: on ? t.name : "Ficha por descubrir"}),
+      h("p", {text: on ? t.ficha : "Resuelve el chip " + t.code + " para leer esta ficha."}));
+  });
+
+  var reset = h("button", {class:"link", type:"button"}, "Borrar mi progreso");
+  reset.addEventListener("click", function(){
+    if (reset.dataset.armed){ try { localStorage.removeItem(KEY); } catch (e) {} state = {name:"", best:{}, booted:false}; showStart(); return; }
+    reset.dataset.armed = "1"; reset.textContent = "¿Seguro? Toca otra vez para borrar todo";
+    setTimeout(function(){ if (reset.isConnected){ delete reset.dataset.armed; reset.textContent = "Borrar mi progreso"; } }, 4000);
+  });
+
+  show(
+    h("header", {class:"top"},
+      h("div", null,
+        h("p", {class:"label", text:"Técnico en turno: " + state.name}),
+        h("h1", null, "Enciende la ", h("em", null, "tarjeta madre")),
+        h("p", {class:"lead"}, "Toca un chip con LED ámbar para jugar su reto. Cada chip resuelto descubre a sus vecinos.")),
+      h("div", {class:"meters"},
+        h("div", {class:"meter"}, h("b", {text:n + "/12"}), h("span", null, "Chips")),
+        h("div", {class:"meter"}, h("b", {text:s + "/36"}), h("span", null, "Estrellas")),
+        h("div", {class:"meter"}, h("b", {text:s * 100}), h("span", null, "XP")),
+        h("div", {class:"boot"},
+          h("div", {class:"bootrow"}, h("span", {class:"label"}, "Arranque del sistema " + Math.round(n / T.length * 100) + "%"),
+            h("span", {class:"rankchip", text:rank(s)})),
+          h("div", {class:"bootbar", role:"progressbar", "aria-valuemin":"0", "aria-valuemax":"12", "aria-valuenow":String(n)},
+            h("i", {style:"width:" + (n / T.length * 100) + "%"}))))),
+    h("section", {class:"board", "aria-label":"Tablero de retos"}, chips, power),
+    h("section", {class:"panel"},
+      h("div", {class:"row", style:"justify-content:space-between"}, h("h2", {style:"font-size:24px"}, "Bitácora de fichas"),
+        h("span", {class:"label", text:n + " de 12 descubiertas"})),
+      h("div", {class:"log"}, cards)),
+    h("div", {class:"row", style:"justify-content:flex-end"}, reset));
+}
+
+/* ---------------- Retos ---------------- */
+function play(t){ if (t.type === "sort") playSort(t); else playQuiz(t); }
+function frame(t, prog){
+  var body = h("div", {class:"fb", style:"gap:14px"});
+  show(h("section", {class:"panel"},
+    h("div", {class:"phead"}, h("span", {class:"badge", text:t.code}),
+      h("div", null, h("h2", {text:t.name}), h("p", {style:"color:var(--muted)", text:t.intro})),
+      h("button", {class:"link", type:"button", onclick:showBoard}, "Salir")),
+    prog, body));
+  return body;
+}
+function progLine(){ var p = h("p", {class:"prog"}); return p; }
+function setProg(p, i, n, errs){ p.replaceChildren(document.createTextNode((i + 1) + " / " + n + "   "), h("span", {class:"errs", text: errs ? "Errores: " + errs : ""})); }
+
+function playQuiz(t){
+  var i = 0, errs = 0, prog = progLine(), body = frame(t, prog);
+  (function next(){
+    if (i >= t.qs.length) return finish(t, errs);
+    setProg(prog, i, t.qs.length, errs);
+    var q = t.qs[i], order = q.opts.map(function(_, k){ return k; });
+    if (!q.tf) shuffle(order);
+    var locked = false, fb = h("div", {class:"fb", role:"status"});
+    var btns = order.map(function(k){ return h("button", {class:"opt", type:"button", onclick:function(){ pick(k); }}, q.opts[k]); });
+    body.replaceChildren(h("p", {class:"q", text:q.q}), h("div", {class:"opts" + (q.tf ? " tf" : "")}, btns), fb);
+    function pick(k){
+      if (locked) return; locked = true;
+      var good = k === q.a; if (!good) errs++;
+      btns.forEach(function(b, j){ b.disabled = true; if (order[j] === q.a) b.classList.add("is-good"); else if (order[j] === k) b.classList.add("is-bad"); });
+      setProg(prog, i, t.qs.length, errs);
+      var go = h("button", {class:"btn", type:"button", onclick:function(){ i++; next(); }}, i + 1 < t.qs.length ? "Siguiente" : "Ver resultado");
+      add(fb, [h("p", {class:"verdict " + (good ? "good" : "bad"), text: good ? "¡Correcto!" : "No era esa"}), h("p", {class:"why", text:q.why}), go]);
+      go.focus();
+    }
+  })();
+}
+
+function playSort(t){
+  var items = shuffle(t.items.slice()), i = 0, errs = 0, prog = progLine(), body = frame(t, prog);
+  var card = h("p", {class:"item"}), fb = h("div", {class:"fb", role:"status"});
+  var btns = t.cats.map(function(c, k){ return h("button", {class:"opt", type:"button", onclick:function(){ pick(k, this); }}, c); });
+  body.replaceChildren(card, h("div", {class:"opts cats"}, btns), fb);
+  function paint(){ setProg(prog, i, items.length, errs); card.textContent = items[i][0]; }
+  function pick(k, b){
+    if (k !== items[i][1]){
+      errs++; setProg(prog, i, items.length, errs);
+      card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake");
+      fb.replaceChildren(h("p", {class:"verdict bad", text:"«" + items[i][0] + "» no es " + t.cats[k] + ". Intenta otra."}));
+      return;
+    }
+    fb.replaceChildren(h("p", {class:"verdict good", text:"✓ " + items[i][0] + " → " + t.cats[k]}));
+    i++;
+    if (i >= items.length){ btns.forEach(function(x){ x.disabled = true; }); setTimeout(function(){ finish(t, errs); }, 650); }
+    else paint();
+  }
+  paint();
+}
+
+function finish(t, errs){
+  var got = starsFor(errs), prev = state.best[t.id], first = prev == null;
+  var idx = T.indexOf(t);
+  var before = T.map(function(_, k){ return isOpen(k); });
+  if (first || got > prev) state.best[t.id] = got;
+  save();
+  var found = T.filter(function(_, k){ return !before[k] && isOpen(k); });
+  var back = h("button", {class:"btn", type:"button", onclick:showBoard}, "Volver al tablero");
+  show(h("section", {class:"panel result"},
+    h("p", {class:"label", text:t.code + " · " + (errs ? errs + (errs === 1 ? " error" : " errores") : "sin errores")}),
+    h("h2", {style:"font-size:clamp(26px,6vw,38px)", text: first ? "¡Chip soldado!" : (got > prev ? "¡Mejoraste tu marca!" : "Reto repetido")}),
+    stars(got),
+    !first && got <= prev ? h("p", {style:"color:var(--muted)", text:"Tu mejor resultado sigue siendo " + starTxt(prev) + "."}) : null,
+    h("div", {class:"ficha"}, h("p", {class:"label"}, "Ficha desbloqueada"), h("h3", {text:t.name}), h("p", {text:t.ficha})),
+    found.length ? h("p", {style:"color:var(--led-wait);font-weight:700", text:"Nuevo chip descubierto: " + found.map(function(f){ return f.name; }).join(" y ")}) : null,
+    h("div", {class:"row"}, back, got < 3 ? h("button", {class:"btn ghost", type:"button", onclick:function(){ play(t); }}, "Reintentar por 3 ★") : null)));
+  back.focus();
+  if (idx < 0) return;
+}
+
+/* ---------------- Arranque final ---------------- */
+function loadRecords(){ try { var r = JSON.parse(localStorage.getItem(RKEY) || "[]"); return Array.isArray(r) ? r : []; } catch (e) { return []; } }
+function saveRecord(){
+  var r = loadRecords().filter(function(x){ return x.name !== state.name; });
+  r.push({name:state.name, stars:starSum()});
+  r.sort(function(a, b){ return b.stars - a.stars; }); r = r.slice(0, 6);
+  try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch (e) {}
+  return r;
+}
+function boot(){
+  state.booted = true; save();
+  var s = starSum(), recs = saveRecord();
+  var lines = ["POST · Prueba de arranque v1.0", "Detectando componentes..."];
+  T.forEach(function(t){ var name = (t.name + " ").padEnd(30, "."); lines.push(name + " OK  " + starTxt(state.best[t.id])); });
+  lines.push("", "Estrellas totales: " + s + " / 36", "Nivel: " + rank(s), "", "Sistema encendido. Bienvenida/o, " + state.name + ".");
+  var term = h("div", {class:"term", role:"log", "aria-live":"polite"});
+  var tail = h("div", {class:"fb", hidden:true},
+    h("h2", {style:"font-size:clamp(26px,6vw,40px)"}, "¡La computadora arrancó!"),
+    stars(s >= 33 ? 3 : s >= 24 ? 2 : 1),
+    h("p", {style:"color:var(--muted)", text:"Repite los chips con menos de 3 estrellas para subir de nivel. Máximo: 36 estrellas."}),
+    recs.length ? h("p", {class:"label"}, "Récords en este dispositivo") : null,
+    h("ol", {class:"records"}, recs.map(function(r, k){ return h("li", null, h("span", {text:(k + 1) + ". " + r.name}), h("span", {text:r.stars + " ★"})); })),
+    h("button", {class:"btn", type:"button", onclick:showBoard}, "Volver al tablero"));
+  show(h("section", {class:"panel result"}, h("p", {class:"label"}, "Botón de encendido presionado"), term, tail));
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var k = 0;
+  (function step(){
+    if (k >= lines.length){ tail.hidden = false; return; }
+    var txt = lines[k++];
+    term.appendChild(h("div", {class: txt.indexOf("OK") > -1 || !txt ? "" : "dim", text: txt || " "}));
+    if (reduce) step(); else setTimeout(step, 170);
+  })();
+}
+
+/* ---------------- Arranque de la página ---------------- */
+function start(d){
+  var s = (d && d.name) ? d : load();
+  if (s){ state = {name:s.name, best:s.best || {}, booted:!!s.booted}; showBoard(); }
+  else showStart();
+}
+var hot = window.claude && window.claude.hot;
+try { if (hot && hot.snapshot) hot.snapshot(function(){ return state; }); } catch (e) {}
+if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+})();
+</script>
